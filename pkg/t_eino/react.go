@@ -53,11 +53,11 @@ type AgentConfig struct {
 	// This is the recommended model field to use.
 	ToolCallingModel model.ToolCallingChatModel
 
-	// Deprecated: Use ToolCallingModel instead.
-	Model model.ChatModel
+	// 需要隐藏的工具
+	HideToolsConfig compose.ToolsNodeConfig
 
-	// ToolsConfig is the config for tools node.
-	ToolsConfig compose.ToolsNodeConfig
+	// 直接暴露的工具
+	OriginalToolsConfig compose.ToolsNodeConfig
 
 	// MessageModifier.
 	// modify the input messages before the model is called, it's useful when you want to add some system prompt or other messages.
@@ -169,7 +169,7 @@ func NewAgent(ctx context.Context, config *AgentConfig) (_ *Agent, err error) {
 	var (
 		chatModel       model.BaseChatModel
 		toolsNode       *compose.ToolsNode
-		toolInfos       []*schema.ToolInfo
+		toolsConfig     compose.ToolsNodeConfig
 		toolCallChecker = config.StreamToolCallChecker
 		messageModifier = config.MessageModifier
 	)
@@ -193,15 +193,12 @@ func NewAgent(ctx context.Context, config *AgentConfig) (_ *Agent, err error) {
 		toolCallChecker = checkChunkStreamToolCallChecker
 	}
 
-	if toolInfos, err = genToolInfos(ctx, config.ToolsConfig); err != nil {
+	chatModel, toolsConfig, err = NewLearnModel(ctx, config.ToolCallingModel, config.HideToolsConfig, config.OriginalToolsConfig)
+	if err != nil {
 		return nil, err
 	}
 
-	if chatModel, err = agent.ChatModelWithTools(config.Model, config.ToolCallingModel, toolInfos); err != nil {
-		return nil, err
-	}
-
-	if toolsNode, err = compose.NewToolNode(ctx, &config.ToolsConfig); err != nil {
+	if toolsNode, err = compose.NewToolNode(ctx, &toolsConfig); err != nil {
 		return nil, err
 	}
 
